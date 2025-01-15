@@ -19,7 +19,7 @@ def price_fixed_rate_bond_precise(nominal, coupon_rate, maturity_years, rfr):
     rfr /= 100
     
     cash_flows = np.array([nominal * coupon_rate] * maturity_years)
-    cash_flows[-1] += nominal 
+    cash_flows[-1] += nominal
     time_periods = np.arange(1, maturity_years + 1)
     discounted_price = np.sum(cash_flows / (1 + rfr) ** time_periods)
     
