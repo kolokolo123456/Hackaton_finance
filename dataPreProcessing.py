@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+from scipy.optimize import newton
 from tabulate import tabulate
 from datetime import datetime
 
@@ -16,17 +17,12 @@ def price_fixed_rate_bond_precise(nominal, coupon_rate, maturity_years, rfr):
     Returns:
     - float, prix actualisé de l'obligation.
     """
+
     coupon_rate /= 100
     rfr /= 100
-
-    # Calcul des flux de trésorerie
     cash_flows = np.array([nominal * coupon_rate] * maturity_years)
     cash_flows[-1] += nominal
-
-    # Périodes de temps
     time_periods = np.arange(1, maturity_years + 1)
-
-    # Prix actualisé
     discounted_price = np.sum(cash_flows / (1 + rfr) ** time_periods)
     return discounted_price
 
@@ -37,7 +33,6 @@ def days_to_years(days):
 class BondCSVPreprocessor:
     def __init__(self, file_path):
         self.file_path = file_path
-        # df contient les données lues à partir de fichier csv (type pandas.DataFrame)
         self.df = None
         
     def load_data(self):
@@ -48,7 +43,6 @@ class BondCSVPreprocessor:
         except Exception as e:
             print(f"Erreur lors du chargement du fichier: {e}")
 
-########################################################################################################################################################################################
     
     def clean_data(self):
         """Traite les valeurs manquantes, nettoie et estime les prix manquants."""
@@ -56,26 +50,18 @@ class BondCSVPreprocessor:
             print("Aucune donnée disponible pour le nettoyage.")
             return
 
-        # Date de référence pour le calcul des maturités
         reference_date = datetime(2025, 1, 16)
 
-        # 1. Remplir les nominals manquants avec 100
         self.df['Nominal'] = self.df['Nominal'].fillna(100)
-
-        # 2. Remplir les coupons manquants par la moyenne
         coupon_mean = self.df['Coupon %'].mean()
         self.df['Coupon %'] = self.df['Coupon %'].fillna(coupon_mean)
-
-        # 3. Calcul des maturités en années à partir de la date de maturité
         self.df['Maturité'] = pd.to_datetime(self.df['Maturité'], errors='coerce')
         self.df['Maturity Years'] = self.df['Maturité'].apply(
             lambda x: days_to_years((x - reference_date).days) if pd.notnull(x) else np.nan
         )
-        # Supprimer les obligations avec des maturités invalides
         self.df.dropna(subset=['Maturity Years'], inplace=True)
 
-        # 4. Estimer les prix de marché manquants avec la fonction `price_fixed_rate_bond_precise`
-        rfr = 3.0  # Taux sans risque en pourcentage (ajuster selon le contexte)
+        rfr = 3.0  
         for idx, row in self.df.iterrows():
             if pd.isnull(row['Prix marché (clean)']):
                 nominal = row['Nominal']
@@ -85,7 +71,6 @@ class BondCSVPreprocessor:
                     nominal, coupon_rate, maturity_years, rfr
                 )
 
-        # Validation finale : supprimer les lignes restantes avec des valeurs manquantes
         self.df.dropna(subset=['Prix marché (clean)'], inplace=True)
 
         print("Nettoyage des données terminé.")
@@ -97,7 +82,6 @@ class BondCSVPreprocessor:
             self.clean_data()
             print("Le prétraitement des données a été effectué avec robustesse.")
 
-########################################################################################################################################################################################
 
     def save_cleaned_data(self, output_path):
         """Sauvegarde le DataFrame nettoyé dans un fichier CSV."""
@@ -123,9 +107,43 @@ class BondCSVPreprocessor:
             print("Aucune donnée chargée pour afficher le tableau.")
 
 
+def solve_for_r(price, nominal, coupon_rate, maturity_years):
+
+    coupon = nominal * (coupon_rate / 100)
+    
+    def f(r):
+        cash_flows = np.array([coupon] * maturity_years)
+        cash_flows[-1] += nominal  # Ajouter le nominal au dernier flux
+        time_periods = np.arange(1, maturity_years + 1)
+        return np.sum(cash_flows / (1 + r) ** time_periods) - price
+    
+    r_solution = newton(f, x0=0.03, tol=1e-6, maxiter=100)
+    return np.round(r_solution, 6)
+
+
 if __name__ == "__main__":
     file_path = '~/Hackaton_finance/bonds.csv'
+    
     preprocessor = BondCSVPreprocessor(file_path)
     preprocessor.process_data()
-    preprocessor.show_table()
+    
+    r_values = []
+    
+    for idx, row in preprocessor.df.iterrows():
+        price = row['Prix marché (clean)']
+        nominal = row['Nominal']
+        coupon_rate = row['Coupon %']
+        maturity_years = int(row['Maturity Years'])
+        
+        r = solve_for_r(price, nominal, coupon_rate, maturity_years)
+        
+        if not np.isnan(r):
+            r_values.append(r)
+    
+    if r_values:
+        average_r = np.mean(r_values)
+        print(f"\nLa moyenne des taux sans risque calculés est : {average_r:.6%}")
+    else:
+        print("\nAucun taux sans risque valide n'a été calculé.")
+    
     preprocessor.save_cleaned_data('cleaned_bonds.csv')
