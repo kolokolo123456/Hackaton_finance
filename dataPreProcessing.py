@@ -1,7 +1,6 @@
 import pandas as pd
 import numpy as np
 from scipy.optimize import newton
-from tabulate import tabulate
 from datetime import datetime
 
 def price_fixed_rate_bond_precise(nominal, coupon_rate, maturity_years, rfr):
@@ -114,29 +113,74 @@ def solve_for_r(price, nominal, coupon_rate, maturity_years):
     return np.round(r_solution, 6)
 
 
+
+
 if __name__ == "__main__":
-    file_path = '~/Hackaton_finance/bonds.csv'
-    
+    file_path = '~/Hackaton_finance/bonds.csv'  # Chemin vers le fichier CSV
+
+    # Initialisation du préprocesseur
     preprocessor = BondCSVPreprocessor(file_path)
-    preprocessor.process_data()
-    
-    r_values = []
-    
-    for idx, row in preprocessor.df.iterrows():
-        price = row['Prix marché (clean)']
-        nominal = row['Nominal']
-        coupon_rate = row['Coupon %']
-        maturity_years = int(row['Maturity Years'])
-        
-        r = solve_for_r(price, nominal, coupon_rate, maturity_years)
-        
-        if not np.isnan(r):
-            r_values.append(r)
-    
-    if r_values:
-        average_r = np.mean(r_values)
-        print(f"\nLa moyenne des taux sans risque calculés est : {average_r:.6%}")
-    else:
-        print("\nAucun taux sans risque valide n'a été calculé.")
-    
-    preprocessor.save_cleaned_data('cleaned_bonds.csv')
+
+    try:
+        # Étape 1 : Prétraitement des données
+        print("\n--- Étape 1 : Prétraitement des données ---")
+        preprocessor.process_data()
+
+        # Étape 2 : Conversion explicite de 'Maturité' en datetime
+        print("\n--- Étape 2 : Conversion de 'Maturité' en datetime ---")
+        preprocessor.df['Maturité'] = pd.to_datetime(preprocessor.df['Maturité'], errors='coerce')
+
+        # Suppression des lignes avec des dates de maturité invalides
+        if preprocessor.df['Maturité'].isnull().any():
+            print("Attention : Certaines valeurs de 'Maturité' sont invalides et seront supprimées.")
+            preprocessor.df = preprocessor.df.dropna(subset=['Maturité'])
+
+        # Étape 3 : Calcul manuel de 'Maturity Years'
+        print("\n--- Étape 3 : Calcul manuel de 'Maturity Years' ---")
+        reference_date = datetime(2025, 1, 16)
+        preprocessor.df['Maturity Years'] = preprocessor.df['Maturité'].apply(
+            lambda x: (x - reference_date).days / 360
+        )
+
+        # Suppression des lignes sans valeur valide pour 'Maturity Years'
+        preprocessor.df = preprocessor.df.dropna(subset=['Maturity Years'])
+
+        # Étape 4 : Calcul des taux sans risque (r)
+        print("\n--- Étape 4 : Calcul des taux sans risque (r) ---")
+        r_values = []
+
+        for idx, row in preprocessor.df.iterrows():
+            try:
+                # Extraction des données nécessaires
+                price = row['Prix marché (clean)']
+                nominal = row['Nominal']
+                coupon_rate = row['Coupon %']
+                maturity_years = int(row['Maturity Years'])
+
+                # Calcul du taux sans risque
+                r = solve_for_r(price, nominal, coupon_rate, maturity_years)
+
+                # Ajouter le taux sans risque calculé s'il est valide
+                if not np.isnan(r):
+                    r_values.append(r)
+                    print(f"Ligne {idx}: r = {r:.6%}")
+                else:
+                    print(f"Ligne {idx}: Échec du calcul de r.")
+            except Exception as e:
+                print(f"Erreur lors du calcul de r pour la ligne {idx}: {e}")
+
+        # Étape 5 : Calcul de la moyenne des r
+        print("\n--- Étape 5 : Calcul de la moyenne des taux sans risque ---")
+        if r_values:
+            average_r = np.mean(r_values)
+            print(f"\nLa moyenne des taux sans risque calculés est : {average_r:.6%}")
+        else:
+            print("\nAucun taux sans risque valide n'a été calculé.")
+
+        # Étape 6 : Sauvegarde des données nettoyées
+        print("\n--- Étape 6 : Sauvegarde des données nettoyées ---")
+        preprocessor.save_cleaned_data('cleaned_bonds.csv')
+
+    except Exception as e:
+        print(f"Une erreur est survenue : {e}")
+
