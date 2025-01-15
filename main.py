@@ -1,23 +1,38 @@
-#!/usr/bin/env python3
-import json
-from datetime import datetime
-import pandas as pd
+import numpy as np
 
-def pricer_step1(nominal, coupon, maturity, rfr):
-    price = 0
-    for t in range(1, maturity + 1):
-        # Calculer l'actualisation des coupons
-        price += coupon * nominal / (1 + rfr) ** t
-    # Ajouter le remboursement du principal à la fin de la maturité
-    price += nominal / (1 + rfr) ** maturity
-    return price
+def price_fixed_rate_bond_precise(nominal, coupon_rate, maturity_years, rfr):
+    """
+    Calcule le prix d'une obligation avec un taux sans risque fixe en utilisant une actualisation précise.
+    
+    Args:
+    - nominal : float, valeur nominale de l'obligation.
+    - coupon_rate : float, taux de coupon annuel (en pourcentage).
+    - maturity_years : int, nombre d'années jusqu'à la maturité.
+    - rfr : float, taux sans risque (en pourcentage).
+    
+    Returns:
+    - float, prix actualisé de l'obligation.
+    """
+    # Convertir les taux en décimaux
+    coupon_rate /= 100
+    rfr /= 100
+    
+    # Calcul des flux de trésorerie : coupon chaque année + remboursement final du nominal
+    cash_flows = np.array([nominal * coupon_rate] * maturity_years)
+    cash_flows[-1] += nominal  # Ajouter le nominal au dernier flux
+    
+    # Calcul du prix actualisé avec actualisation discrète
+    time_periods = np.arange(1, maturity_years + 1)
+    discounted_price = np.sum(cash_flows / (1 + rfr) ** time_periods)
+    
+    return discounted_price
 
-# Paramètres
-nominal = 100
-coupon = 0.04  # 4% par an
-maturity = 5  # 5 ans
-rfr = 0.03  # 3% taux sans risque fixe
-
-# Calcul du prix de l'obligation
-price = pricer_step1(nominal, coupon, maturity, rfr)
-print(f"Le prix de l'obligation est : {price:.2f} €")
+# Exécution de la fonction
+if __name__ == "__main__":
+    nominal = 100
+    coupon_rate = 5  # En pourcentage
+    maturity_years = 5
+    rfr = 3  # En pourcentage
+    
+    price = price_fixed_rate_bond_precise(nominal, coupon_rate, maturity_years, rfr)
+    print(f"Prix actualisé de l'obligation : {price:.6f} €")
