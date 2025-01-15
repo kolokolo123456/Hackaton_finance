@@ -45,33 +45,26 @@ class BondCSVPreprocessor:
 
     
     def clean_data(self):
-        """Traite les valeurs manquantes, nettoie et estime les prix manquants."""
+        """Supprime les lignes incomplètes et nettoie les données."""
         if self.df is None:
             print("Aucune donnée disponible pour le nettoyage.")
             return
 
-        reference_date = datetime(2025, 1, 16)
+        # Suppression des lignes contenant des valeurs manquantes
+        initial_rows = len(self.df)
+        self.df.dropna(inplace=True)
+        final_rows = len(self.df)
 
-        self.df['Nominal'] = self.df['Nominal'].fillna(100)
-        coupon_mean = self.df['Coupon %'].mean()
-        self.df['Coupon %'] = self.df['Coupon %'].fillna(coupon_mean)
-        self.df['Maturité'] = pd.to_datetime(self.df['Maturité'], errors='coerce')
-        self.df['Maturity Years'] = self.df['Maturité'].apply(
-            lambda x: days_to_years((x - reference_date).days) if pd.notnull(x) else np.nan
-        )
-        self.df.dropna(subset=['Maturity Years'], inplace=True)
+        # Affichage du nombre de lignes supprimées
+        removed_rows = initial_rows - final_rows
+        if removed_rows > 0:
+            print(f"{removed_rows} lignes incomplètes supprimées.")
+        else:
+            print("Aucune ligne incomplète détectée.")
 
-        rfr = 3.0  
-        for idx, row in self.df.iterrows():
-            if pd.isnull(row['Prix marché (clean)']):
-                nominal = row['Nominal']
-                coupon_rate = row['Coupon %']
-                maturity_years = int(row['Maturity Years'])
-                self.df.at[idx, 'Prix marché (clean)'] = price_fixed_rate_bond_precise(
-                    nominal, coupon_rate, maturity_years, rfr
-                )
-
-        self.df.dropna(subset=['Prix marché (clean)'], inplace=True)
+        # Validation finale : Vérification qu'il ne reste plus de valeurs manquantes
+        if self.df.isnull().any().any():
+            raise ValueError("Certaines valeurs manquantes persistent après le nettoyage.")
 
         print("Nettoyage des données terminé.")
 
