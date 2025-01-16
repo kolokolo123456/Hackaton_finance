@@ -1,6 +1,6 @@
 from etape1 import price_fixed_rate_bond_precise
 from dataPreProcessing import  BondCSVPreprocessor
-from statsmodels.robust.scale import huber
+from numpy.polynomial.polynomial import Polynomial
 
 import pandas as pd
 import numpy as np
@@ -20,10 +20,76 @@ def ytm(P, N, C, T, tol=1e-9, max_iter=10000):
             return r_new
         r = r_new
 
-def estimate_rfr(ytm_list):
-    # On utilise l'estimateur de huber pour gérer les valeurs extrêmes de r
-    rfr, _ = huber([ytm for ytm in ytm_list if ytm >= 0])
+def estimate_rfr_median(ytm_list):
+    filtered_ytm = [ytm for ytm in ytm_list if ytm >= 0]
+    if not filtered_ytm:
+        raise ValueError("Aucun rendement positif valide pour estimer le taux sans risque.")
+    return np.median(filtered_ytm)
+
+def estimate_rfr_huber(ytm_list):
+    filtered_ytm = [ytm for ytm in ytm_list if ytm >= 0]
+    if not filtered_ytm:
+        raise ValueError("Aucun rendement positif valide pour estimer le taux sans risque.")
+    rfr, _ = huber(filtered_ytm)
     return rfr
+
+def estimate_rfr_trimmed_mean(ytm_list, proportion_to_cut=0.1):
+    filtered_ytm = [ytm for ytm in ytm_list if ytm >= 0]
+    if not filtered_ytm:
+        raise ValueError("Aucun rendement positif valide pour estimer le taux sans risque.")
+    return trim_mean(filtered_ytm, proportion_to_cut)
+
+def estimate_rfr_regression(maturities, ytm_list, target_maturity):
+    filtered_data = [(m, y) for m, y in zip(maturities, ytm_list) if y >= 0]
+    if not filtered_data:
+        raise ValueError("Aucune donnée valide pour estimer le taux sans risque.")
+    x, y = zip(*filtered_data)
+    model = Polynomial.fit(x, y, deg=2)  # Ajustement quadratique
+    return model(target_maturity)
+
+
+def estimate_rfr_ema(ytm_list, alpha=0.2):
+    filtered_ytm = [ytm for ytm in ytm_list if ytm >= 0]
+    if not filtered_ytm:
+        raise ValueError("Aucun rendement positif valide pour estimer le taux sans risque.")
+    ema = filtered_ytm[0]
+    for ytm in filtered_ytm[1:]:
+        ema = alpha * ytm + (1 - alpha) * ema
+    return ema
+
+
+def estimate_rfr_quantile(ytm_list, quantile=0.5):
+    filtered_ytm = [ytm for ytm in ytm_list if ytm >= 0]
+    if not filtered_ytm:
+        raise ValueError("Aucun rendement positif valide pour estimer le taux sans risque.")
+    return np.quantile(filtered_ytm, quantile)
+
+def estimate_rfr_bayesian(ytm_list, prior_r=0.02, prior_weight=0.5):
+    filtered_ytm = [ytm for ytm in ytm_list if ytm >= 0]
+    if not filtered_ytm:
+        raise ValueError("Aucun rendement positif valide pour estimer le taux sans risque.")
+    likelihood = np.mean(filtered_ytm)
+    return prior_weight * prior_r + (1 - prior_weight) * likelihood
+
+def estimate_rfr_long_term(ytm_list, maturities, threshold=10):
+    filtered_data = [ytm for ytm, m in zip(ytm_list, maturities) if ytm >= 0 and m >= threshold]
+    if not filtered_data:
+        raise ValueError("Aucune obligation long terme valide pour estimer le taux sans risque.")
+    return np.mean(filtered_data)
+
+
+
+
+def estimate_rfr_weighted_average(ytm_list, weights):
+    if len(ytm_list) != len(weights):
+        raise ValueError("Les longueurs de 'ytm_list' et 'weights' doivent être identiques.")
+    filtered_ytm = [ytm for ytm in ytm_list if ytm >= 0]
+    filtered_weights = [weights[i] for i, ytm in enumerate(ytm_list) if ytm >= 0]
+    if not filtered_ytm:
+        raise ValueError("Aucun rendement positif valide pour estimer le taux sans risque.")
+    return np.average(filtered_ytm, weights=filtered_weights)
+
+
 
 if __name__ == "__main__":
     file_path = '~/Hackaton_finance/bonds.csv'
