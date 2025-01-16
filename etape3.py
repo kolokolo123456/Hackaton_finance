@@ -1,10 +1,11 @@
-from etape1 import price_fixed_rate_bond_precise
-from dataPreProcessing import  BondCSVPreprocessor
-from numpy.polynomial.polynomial import Polynomial
-
 import pandas as pd
 import numpy as np
 from datetime import datetime
+from scipy.stats import trim_mean
+from statsmodels.robust.scale import huber
+from numpy.polynomial.polynomial import Polynomial
+from etape1 import price_fixed_rate_bond_precise
+from dataPreProcessing import BondCSVPreprocessor
 
 def days_to_years(days):
     """Convertit des jours en années en considérant 360 jours/an."""
@@ -77,9 +78,6 @@ def estimate_rfr_long_term(ytm_list, maturities, threshold=10):
         raise ValueError("Aucune obligation long terme valide pour estimer le taux sans risque.")
     return np.mean(filtered_data)
 
-
-
-
 def estimate_rfr_weighted_average(ytm_list, weights):
     if len(ytm_list) != len(weights):
         raise ValueError("Les longueurs de 'ytm_list' et 'weights' doivent être identiques.")
@@ -89,7 +87,54 @@ def estimate_rfr_weighted_average(ytm_list, weights):
         raise ValueError("Aucun rendement positif valide pour estimer le taux sans risque.")
     return np.average(filtered_ytm, weights=filtered_weights)
 
+def calculate_average_rfr_all_methods(ytm_list, maturities=None, weights=None, target_maturity=None, alpha=0.2, quantile=0.5, prior_r=0.02, prior_weight=0.5, threshold=10, proportion_to_cut=0.1):
+    results = []
 
+    # Méthodes indépendantes des maturities ou weights
+    rfr_median = estimate_rfr_median(ytm_list)
+    print(f"RFR Median: {rfr_median}")
+    results.append(rfr_median)
+    
+    rfr_huber = estimate_rfr_huber(ytm_list)
+    print(f"RFR Huber: {rfr_huber}")
+    results.append(rfr_huber)
+    
+    # rfr_trimmed_mean = estimate_rfr_trimmed_mean(ytm_list, proportion_to_cut)
+    # print(f"RFR Trimmed Mean: {rfr_trimmed_mean}")
+    # results.append(rfr_trimmed_mean)
+    
+    # rfr_ema = estimate_rfr_ema(ytm_list, alpha)
+    # print(f"RFR EMA: {rfr_ema}")
+    # results.append(rfr_ema)
+    
+    # rfr_quantile = estimate_rfr_quantile(ytm_list, quantile)
+    # print(f"RFR Quantile: {rfr_quantile}")
+    # results.append(rfr_quantile)
+    
+    # rfr_bayesian = estimate_rfr_bayesian(ytm_list, prior_r, prior_weight)
+    # print(f"RFR Bayesian: {rfr_bayesian}")
+    # results.append(rfr_bayesian)
+
+    # # Méthodes nécessitant maturities
+    # if maturities is not None and target_maturity is not None:
+    #     rfr_regression = estimate_rfr_regression(maturities, ytm_list, target_maturity)
+    #     print(f"RFR Regression: {rfr_regression}")
+    #     results.append(rfr_regression)
+    if maturities is not None:
+        rfr_long_term = estimate_rfr_long_term(ytm_list, maturities, threshold)
+        print(f"RFR Long Term: {rfr_long_term}")
+        results.append(rfr_long_term)
+
+    # Méthodes nécessitant weights
+    if weights is not None:
+        rfr_weighted_average = estimate_rfr_weighted_average(ytm_list, weights)
+        print(f"RFR Weighted Average: {rfr_weighted_average}")
+        results.append(rfr_weighted_average)
+
+    # Calcul de la moyenne des résultats
+    average_rfr = np.mean(results)
+    print(f"Average RFR: {average_rfr}")
+    return average_rfr
 
 if __name__ == "__main__":
     file_path = '~/Hackaton_finance/bonds.csv'
@@ -132,7 +177,15 @@ if __name__ == "__main__":
 
         # Étape 5 : Calcul de la moyenne des r
         print("\n--- Étape 5 : Calcul de la moyenne des taux sans risque ---")
-        average_r = estimate_rfr(r_values)
+        # Définition des paramètres supplémentaires
+        maturities = preprocessor.df['Maturity Years'].tolist()
+        weights = [1 / len(r_values) for _ in r_values]  # Pondération uniforme
+        
+        average_r = calculate_average_rfr_all_methods(
+            r_values, 
+            maturities=maturities, 
+            weights=weights,
+        )
         print(f"La moyenne des taux sans risque calculés est : {average_r:.6%}")
 
         # Étape 6 : Estimation du prix du bond
