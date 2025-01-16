@@ -1,6 +1,5 @@
 import pandas as pd
 import numpy as np
-from scipy.optimize import newton
 from datetime import datetime
 from tabulate import tabulate
 
@@ -54,23 +53,30 @@ class BondCSVPreprocessor:
         reference_date = datetime(2025, 1, 16)
 
         # 1. Suppression des lignes contenant des valeurs manquantes
+        initial_rows = len(self.df)
         self.df.dropna(inplace=True)
+        after_dropna_rows = len(self.df)
+        removed_due_to_na = initial_rows - after_dropna_rows
 
         # 2. Conversion de la colonne 'Maturité' en type datetime
         self.df['Maturité'] = pd.to_datetime(self.df['Maturité'], errors='coerce')
 
         # 3. Suppression des lignes avec des dates de maturité expirées
         self.df = self.df[self.df['Maturité'] >= reference_date]
+        final_rows = len(self.df)
+        removed_due_to_expired_dates = after_dropna_rows - final_rows
 
-        # 4. Recalcul des années de maturité
-        self.df['Maturity Years'] = self.df['Maturité'].apply(
-            lambda x: max(0, days_to_years((x - reference_date).days)) if pd.notnull(x) else np.nan
-        )
+        # 4. Résumé des suppressions
+        total_removed = removed_due_to_na + removed_due_to_expired_dates
+        print(f"{total_removed} lignes supprimées au total.")
+        print(f"- {removed_due_to_na} lignes supprimées à cause de valeurs manquantes.")
+        print(f"- {removed_due_to_expired_dates} lignes supprimées à cause de dates de maturité expirées.")
 
-        # 5. Suppression des lignes avec des maturités invalides ou manquantes
-        self.df.dropna(subset=['Maturity Years'], inplace=True)
+        # Validation finale
+        if self.df.isnull().any().any():
+            raise ValueError("Certaines valeurs manquantes persistent après le nettoyage.")
 
-        print(f"Nettoyage des données terminé. Nombre de lignes restantes : {len(self.df)}")
+        print("Nettoyage des données terminé.")
 
     def process_data(self):
         """Effectue les étapes de prétraitement robustes."""
@@ -88,14 +94,6 @@ class BondCSVPreprocessor:
         else:
             print("Aucune donnée à sauvegarder.")
 
-    def show_summary(self):
-        """Affiche un résumé des données."""
-        if self.df is not None:
-            print(self.df.info())
-            print(self.df.head())
-        else:
-            print("Aucune donnée chargée.")
-
     def show_table(self):
         """Affiche les données sous forme de tableau."""
         if self.df is not None:
@@ -104,20 +102,37 @@ class BondCSVPreprocessor:
             print("Aucune donnée chargée pour afficher le tableau.")
 
 
-def solve_for_r(price, nominal, coupon_rate, maturity_years):
+def ytm(P, N, C, T, tol=1e-9, max_iter=10000):
+    r = C / P  # Initial guess
+    for _ in range(max_iter):
+        f_r = P - sum(C * N / (1 + r)**t for t in range(1, T+1)) - N / (1 + r)**T
+        f_prime_r = sum(t * C * N / (1 + r)**(t+1) for t in range(1, T+1)) + T * N / (1 + r)**(T+1)
+        r_new = r - f_r / f_prime_r
+        if abs(r_new - r) < tol:
+            return r_new
+        r = r_new
+    raise ValueError("Convergence not achieved within max iterations")
 
-    coupon = nominal * (coupon_rate / 100)
-    
-    def f(r):
-        cash_flows = np.array([coupon] * maturity_years)
-        cash_flows[-1] += nominal  # Ajouter le nominal au dernier flux
-        time_periods = np.arange(1, maturity_years + 1)
-        return np.sum(cash_flows / (1 + r) ** time_periods) - price
-    
-    r_solution = newton(f, x0=0.03, tol=1e-6, maxiter=100)
-    return np.round(r_solution, 6)
+def estimate_rfr(ytm_list, method="weighted", maturities=None):
+    # Vérification des données
+    if method in ["weighted", "long_term"] and maturities is None:
+        raise ValueError("Les maturités doivent être fournies pour les méthodes 'weighted' et 'long_term'.")
+    if method == "weighted" and len(ytm_list) != len(maturities):
+        raise ValueError("Les longueurs de 'ytm_list' et 'maturities' doivent être identiques.")
 
+    # Estimation selon la méthode choisie
+    if method == "weighted":
+        rfr = np.sum(np.array(ytm_list) * np.array(maturities)) / np.sum(maturities)
+    elif method == "long_term":
+        long_term_indices = [i for i, t in enumerate(maturities) if t > 10]
+        long_term_ytms = [ytm_list[i] for i in long_term_indices]
+        rfr = np.mean(long_term_ytms) if long_term_ytms else None
+    elif method == "minimal":
+        rfr = min(ytm_list)
+    else:
+        raise ValueError(f"Méthode '{method}' non reconnue.")
 
+    return rfr
 
 
 if __name__ == "__main__":
@@ -138,54 +153,47 @@ if __name__ == "__main__":
             if pd.notnull(x) else np.nan
         )
 
-        # Supprimer les lignes avec des maturités invalides
+        # Supprimer les lignes avec une maturité invalide
         preprocessor.df.dropna(subset=['Maturity Years'], inplace=True)
 
-        # Affichage des données nettoyées
-        print("\n--- Tableau des données nettoyées ---")
+        # Affichage du tableau nettoyé
         preprocessor.show_table()
 
         # Étape 4 : Calcul des taux sans risque (r)
         print("\n--- Étape 4 : Calcul des taux sans risque (r) ---")
-        # Filtrer les lignes valides
-        preprocessor.df = preprocessor.df[
-            (preprocessor.df['Maturity Years'] > 0) & 
-            (preprocessor.df['Prix marché (clean)'] > 0) & 
-            (preprocessor.df['Nominal'] > 0)
-        ]
+        r_values = []
 
-        if preprocessor.df.empty:
-            print("Aucune donnée valide pour le calcul des taux sans risque.")
+        for idx, row in preprocessor.df.iterrows():
+            try:
+                # Extraction des données nécessaires
+                price = float(row['Prix marché (clean)'])
+                nominal = float(row['Nominal'])
+                coupon_rate = float(row['Coupon %'])
+                maturity_years = int(row['Maturity Years'])
+
+                # Vérifications de cohérence des données
+                if price <= 0 or nominal <= 0 or coupon_rate < 0 or maturity_years <= 0:
+                    raise ValueError("Données incohérentes : les valeurs doivent être positives.")
+
+                # Calcul du taux sans risque
+                r = ytm(price, nominal, coupon_rate, maturity_years)
+
+                # Ajouter le taux sans risque calculé
+                r_values.append(r)
+                print(f"Ligne {idx}: r = {r:.6%}")
+
+            except ValueError as ve:
+                print(f"Ligne {idx}: Erreur de validation des données - {ve}")
+            except Exception as e:
+                print(f"Ligne {idx}: Échec du calcul de r - {e}")
+
+        # Étape 5 : Calcul de la moyenne des r
+        print("\n--- Étape 5 : Calcul de la moyenne des taux sans risque ---")
+        if r_values:
+            average_r = estimate_rfr(r_values, "weighted", preprocessor.df['Maturity Years'])
+            print(f"La moyenne des taux sans risque calculés est : {average_r:.6%}")
         else:
-            print(f"Nombre de lignes valides pour le calcul : {len(preprocessor.df)}")
-
-            r_values = []
-
-            for idx, row in preprocessor.df.iterrows():
-                try:
-                    # Extraction des données nécessaires
-                    price = float(row['Prix marché (clean)'])
-                    nominal = float(row['Nominal'])
-                    coupon_rate = float(row['Coupon %'])
-                    maturity_years = int(row['Maturity Years'])
-
-                    # Calcul du taux sans risque
-                    r = solve_for_r(price, nominal, coupon_rate, maturity_years)
-
-                    # Ajouter le taux sans risque calculé
-                    r_values.append(r)
-                    print(f"Ligne {idx}: r = {r:.6%}")
-
-                except Exception as e:
-                    print(f"Ligne {idx}: Échec du calcul de r - {e}")
-
-            # Étape 5 : Calcul de la moyenne des r
-            print("\n--- Étape 5 : Calcul de la moyenne des taux sans risque ---")
-            if r_values:
-                average_r = np.mean(r_values)
-                print(f"La moyenne des taux sans risque calculés est : {average_r:.6%}")
-            else:
-                print("\nAucun taux sans risque valide n'a été calculé.")
+            print("\nAucun taux sans risque valide n'a été calculé.")
 
         # Étape 6 : Sauvegarde des données nettoyées
         print("\n--- Étape 6 : Sauvegarde des données nettoyées ---")
