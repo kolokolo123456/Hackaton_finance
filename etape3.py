@@ -1,9 +1,7 @@
 import pandas as pd
 import numpy as np
 from datetime import datetime
-from scipy.stats import trim_mean
 from statsmodels.robust.scale import huber
-from numpy.polynomial.polynomial import Polynomial
 from etape1 import price_fixed_rate_bond_precise
 from dataPreProcessing import BondCSVPreprocessor
 
