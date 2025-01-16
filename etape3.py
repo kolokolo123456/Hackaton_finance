@@ -22,9 +22,8 @@ def ytm(P, N, C, T, tol=1e-9, max_iter=10000):
 
 def estimate_rfr(ytm_list):
     # On utilise l'estimateur de huber pour gérer les valeurs extrêmes de r
-    rfr, _ = huber(ytm_list * 100)
+    rfr, _ = huber([ytm for ytm in ytm_list if ytm >= 0])
     return rfr
-
 
 if __name__ == "__main__":
     file_path = '~/Hackaton_finance/bonds.csv'
