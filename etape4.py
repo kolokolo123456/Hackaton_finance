@@ -68,7 +68,7 @@ if __name__ == "__main__":
         nominal = 100
         coupon_rate = 5
         interpolated_price = price_fixed_rate_bond_precise(nominal, coupon_rate, target_maturity_years, interpolated_r * 100)
-        print(f"Prix estimé de l'obligation avec une maturité de {target_maturity_years} ans : {interpolated_price:.2f}")
+        print(f"Prix estimé de l'obligation avec une maturité de {target_maturity_years} ans : {interpolated_price:.10f}")
 
     except Exception as e:
         print(f"Erreur lors de l'extraction : {e}")
