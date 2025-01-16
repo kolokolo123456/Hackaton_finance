@@ -1,5 +1,6 @@
 from etape1 import price_fixed_rate_bond_precise
 from dataPreProcessing import  BondCSVPreprocessor
+from statsmodels.robust.scale import huber
 
 import pandas as pd
 import numpy as np
@@ -19,8 +20,10 @@ def ytm(P, N, C, T, tol=1e-9, max_iter=10000):
             return r_new
         r = r_new
 
-def estimate_rfr(ytm_list, method="weighted", maturities=None):
-    return np.sum(np.array(ytm_list) * np.array(maturities)) / np.sum(maturities)
+def estimate_rfr(ytm_list):
+    # On utilise l'estimateur de huber pour gérer les valeurs extrêmes de r
+    rfr, _ = huber(ytm_list * 100)
+    return rfr
 
 
 if __name__ == "__main__":
@@ -64,13 +67,13 @@ if __name__ == "__main__":
 
         # Étape 5 : Calcul de la moyenne des r
         print("\n--- Étape 5 : Calcul de la moyenne des taux sans risque ---")
-        average_r = estimate_rfr(r_values, "weighted", preprocessor.df['Maturity Years'])
+        average_r = estimate_rfr(r_values)
         print(f"La moyenne des taux sans risque calculés est : {average_r:.6%}")
 
         # Étape 6 : Estimation du prix du bond
         bond_price = price_fixed_rate_bond_precise(100, 4, 5, average_r)
         print(f"Le prix du bond estimé par l'étape 3 : ", bond_price)
-        
+
         # Étape 7 : Sauvegarde des données nettoyées
         print("\n--- Étape 6 : Sauvegarde des données nettoyées ---")
         preprocessor.save_cleaned_data('cleaned_bonds.csv')
