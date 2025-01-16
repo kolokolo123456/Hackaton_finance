@@ -195,7 +195,10 @@ if __name__ == "__main__":
         else:
             print("\nAucun taux sans risque valide n'a été calculé.")
 
-        # Étape 6 : Sauvegarde des données nettoyées
+        # Étape 6 : Estimation du prix du bond
+        bond_price = price_fixed_rate_bond_precise(100, 4, 5, average_r)
+        print(f"Le prix du bond estimé par l'étape 3 : ", bond_price)
+        # Étape 7 : Sauvegarde des données nettoyées
         print("\n--- Étape 6 : Sauvegarde des données nettoyées ---")
         preprocessor.save_cleaned_data('cleaned_bonds.csv')
 
