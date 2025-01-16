@@ -15,13 +15,8 @@ def extract_closest_maturities(file_path, target_maturity_years, reference_date)
     Returns:
     - DataFrame: Les deux obligations ayant les maturités les plus proches de la cible.
     """
-    # Initialisation et traitement des données
     preprocessor = BondCSVPreprocessor(file_path)
     preprocessor.process_data()
-
-    # Vérifier si le DataFrame a été correctement chargé
-    if preprocessor.df is None:
-        raise ValueError("Les données n'ont pas pu être chargées correctement.")
 
     # Conversion de la colonne 'Maturité' en datetime
     preprocessor.df['Maturité'] = pd.to_datetime(preprocessor.df['Maturité'], errors='coerce')
@@ -30,36 +25,21 @@ def extract_closest_maturities(file_path, target_maturity_years, reference_date)
     ref_date = pd.to_datetime(reference_date)
     preprocessor.df['Years to Maturity'] = (preprocessor.df['Maturité'] - ref_date).dt.days / 360
 
-    # Filtrer les obligations valides (maturité future, prix positif, coupon valide)
-    valid_bonds = preprocessor.df[
-        (preprocessor.df['Prix marché (clean)'] > 0) &
-        (preprocessor.df['Coupon %'].notnull()) &
-        (preprocessor.df['Years to Maturity'] > 0)
-    ]
-
-    # Vérifier s'il y a suffisamment d'obligations valides
-    if valid_bonds.empty:
-        raise ValueError("Aucune obligation valide n'a été trouvée après le filtrage.")
-
     # Calculer la différence avec la maturité cible
-    valid_bonds['Maturity Difference'] = abs(valid_bonds['Years to Maturity'] - target_maturity_years)
+    preprocessor.df['Maturity Difference'] = abs(preprocessor.df['Years to Maturity'] - target_maturity_years)
 
     # Extraire les deux obligations ayant les maturités les plus proches
-    closest_bonds = valid_bonds.nsmallest(3, 'Maturity Difference')
+    closest_bonds = preprocessor.df.nsmallest(3, 'Maturity Difference')
 
     return closest_bonds
 
 
-
 if __name__ == "__main__":
-    # Chemin vers le fichier CSV
-    file_path = '~/Hackaton_finance/bonds.csv'
 
-    # Paramètres
+    file_path = '~/Hackaton_finance/bonds.csv'
     target_maturity_years = 7
     reference_date = '2025-01-16'
 
-    # Exécution
     try:
         closest_bonds = extract_closest_maturities(file_path, target_maturity_years, reference_date)
         print("Les deux obligations ayant les maturités les plus proches sont :")
@@ -85,8 +65,8 @@ if __name__ == "__main__":
         print(f"Rendement interpolé pour une maturité de {target_maturity_years} ans : {interpolated_r:.6%}")
 
         # Calculer le prix de l'obligation avec le rendement interpolé
-        nominal = 100  # Exemple : valeur nominale
-        coupon_rate = 5  # Exemple : taux de coupon en pourcentage
+        nominal = 100
+        coupon_rate = 5
         interpolated_price = price_fixed_rate_bond_precise(nominal, coupon_rate, target_maturity_years, interpolated_r * 100)
         print(f"Prix estimé de l'obligation avec une maturité de {target_maturity_years} ans : {interpolated_price:.2f}")
 

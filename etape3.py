@@ -12,7 +12,7 @@ def days_to_years(days):
     return days / 360
 
 def ytm(P, N, C, T, tol=1e-9, max_iter=10000):
-    r = C / P  # Initial guess
+    r = C / P
     for _ in range(max_iter):
         f_r = P - sum(C * N / (1 + r)**t for t in range(1, T+1)) - N / (1 + r)**T
         f_prime_r = sum(t * C * N / (1 + r)**(t+1) for t in range(1, T+1)) + T * N / (1 + r)**(T+1)
@@ -33,44 +33,6 @@ def estimate_rfr_huber(ytm_list):
         raise ValueError("Aucun rendement positif valide pour estimer le taux sans risque.")
     rfr, _ = huber(filtered_ytm)
     return rfr
-
-def estimate_rfr_trimmed_mean(ytm_list, proportion_to_cut=0.1):
-    filtered_ytm = [ytm for ytm in ytm_list if ytm >= 0]
-    if not filtered_ytm:
-        raise ValueError("Aucun rendement positif valide pour estimer le taux sans risque.")
-    return trim_mean(filtered_ytm, proportion_to_cut)
-
-def estimate_rfr_regression(maturities, ytm_list, target_maturity):
-    filtered_data = [(m, y) for m, y in zip(maturities, ytm_list) if y >= 0]
-    if not filtered_data:
-        raise ValueError("Aucune donnée valide pour estimer le taux sans risque.")
-    x, y = zip(*filtered_data)
-    model = Polynomial.fit(x, y, deg=2)  # Ajustement quadratique
-    return model(target_maturity)
-
-
-def estimate_rfr_ema(ytm_list, alpha=0.2):
-    filtered_ytm = [ytm for ytm in ytm_list if ytm >= 0]
-    if not filtered_ytm:
-        raise ValueError("Aucun rendement positif valide pour estimer le taux sans risque.")
-    ema = filtered_ytm[0]
-    for ytm in filtered_ytm[1:]:
-        ema = alpha * ytm + (1 - alpha) * ema
-    return ema
-
-
-def estimate_rfr_quantile(ytm_list, quantile=0.5):
-    filtered_ytm = [ytm for ytm in ytm_list if ytm >= 0]
-    if not filtered_ytm:
-        raise ValueError("Aucun rendement positif valide pour estimer le taux sans risque.")
-    return np.quantile(filtered_ytm, quantile)
-
-def estimate_rfr_bayesian(ytm_list, prior_r=0.02, prior_weight=0.5):
-    filtered_ytm = [ytm for ytm in ytm_list if ytm >= 0]
-    if not filtered_ytm:
-        raise ValueError("Aucun rendement positif valide pour estimer le taux sans risque.")
-    likelihood = np.mean(filtered_ytm)
-    return prior_weight * prior_r + (1 - prior_weight) * likelihood
 
 def estimate_rfr_long_term(ytm_list, maturities, threshold=10):
     filtered_data = [ytm for ytm, m in zip(ytm_list, maturities) if ytm >= 0 and m >= threshold]
@@ -99,27 +61,6 @@ def calculate_average_rfr_all_methods(ytm_list, maturities=None, weights=None, t
     print(f"RFR Huber: {rfr_huber}")
     results.append(rfr_huber)
     
-    # rfr_trimmed_mean = estimate_rfr_trimmed_mean(ytm_list, proportion_to_cut)
-    # print(f"RFR Trimmed Mean: {rfr_trimmed_mean}")
-    # results.append(rfr_trimmed_mean)
-    
-    # rfr_ema = estimate_rfr_ema(ytm_list, alpha)
-    # print(f"RFR EMA: {rfr_ema}")
-    # results.append(rfr_ema)
-    
-    # rfr_quantile = estimate_rfr_quantile(ytm_list, quantile)
-    # print(f"RFR Quantile: {rfr_quantile}")
-    # results.append(rfr_quantile)
-    
-    # rfr_bayesian = estimate_rfr_bayesian(ytm_list, prior_r, prior_weight)
-    # print(f"RFR Bayesian: {rfr_bayesian}")
-    # results.append(rfr_bayesian)
-
-    # # Méthodes nécessitant maturities
-    # if maturities is not None and target_maturity is not None:
-    #     rfr_regression = estimate_rfr_regression(maturities, ytm_list, target_maturity)
-    #     print(f"RFR Regression: {rfr_regression}")
-    #     results.append(rfr_regression)
     if maturities is not None:
         rfr_long_term = estimate_rfr_long_term(ytm_list, maturities, threshold)
         print(f"RFR Long Term: {rfr_long_term}")
