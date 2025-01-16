@@ -10,11 +10,7 @@ def calculate_accrued_coupon(nominal, coupon_rate, last_payment_date, current_da
     # Nombre de jours écoulés depuis le dernier paiement
     days_elapsed = (current_date - last_payment_date).days
     
-    # Nombre total de jours dans la période (360 par convention)
-    total_days = 360  # Conformément aux conventions
-    accrued_coupon = annual_coupon * (days_elapsed / total_days)
-    
-    return accrued_coupon
+    return annual_coupon * (days_elapsed / 360)
 
 def calculate_bond_price(nominal, coupon_rate, maturity, rate, current_date, issue_date):
     """
@@ -42,16 +38,13 @@ def calculate_bond_price(nominal, coupon_rate, maturity, rate, current_date, iss
 
 # Données fournies
 nominal = 100
-coupon_rate = 4  # en pourcentage
-maturity = 5  # en années
-rate = 0.03  # taux sans risque (3%)
+coupon_rate = 4
+maturity = 5
+rate = 0.02349654472810973  # taux sans risque calculé en étape 3
 issue_date = datetime(2023, 7, 16)
 current_date = datetime(2025, 1, 16)
 
-# Calcul
-bond_price, accrued_coupon, total_price = calculate_bond_price(
-    nominal, coupon_rate, maturity, rate, current_date, issue_date
-)
+bond_price, accrued_coupon, total_price = calculate_bond_price(nominal, coupon_rate, maturity, rate, current_date, issue_date)
 
 # Résultats
 print(f"Prix de l'obligation (flux actualisés) : {bond_price:.2f} €")
