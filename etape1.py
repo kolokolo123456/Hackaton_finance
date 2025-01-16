@@ -33,4 +33,4 @@ if __name__ == "__main__":
     rfr = 3
     
     price = price_fixed_rate_bond_precise(nominal, coupon_rate, maturity_years, rfr)
-    print(f"Prix actualisé de l'obligation avec taux fixe : {price:.6f} €")
+    print(f"Prix actualisé de l'obligation avec taux fixe : {price:.10f} €")

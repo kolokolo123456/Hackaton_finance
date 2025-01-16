@@ -37,4 +37,4 @@ if __name__ == "__main__":
     rfr_schedule = [2, 2.5, 3, 3.5, 4]  
 
     price_etape2 = price_variable_rate_bond(nominal, coupon_rate, maturity_years, rfr_schedule)
-    print(f"Prix actualisé de l'obligation avec taux variable : {price_etape2:.6f} €")
+    print(f"Prix actualisé de l'obligation avec taux variable : {price_etape2:.10f} €")

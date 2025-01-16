@@ -47,6 +47,6 @@ current_date = datetime(2025, 1, 16)
 bond_price, accrued_coupon, total_price = calculate_bond_price(nominal, coupon_rate, maturity, rate, current_date, issue_date)
 
 # Résultats
-print(f"Prix de l'obligation (flux actualisés) : {bond_price:.2f} €")
-print(f"Coupon couru : {accrued_coupon:.2f} €")
-print(f"Prix total de l'obligation : {total_price:.2f} €")
+print(f"Prix de l'obligation (flux actualisés) : {bond_price:.10f} €")
+print(f"Coupon couru : {accrued_coupon:.10f} €")
+print(f"Prix total de l'obligation : {total_price:.10f} €")
